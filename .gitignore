@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+venv/
+.env
+.DS_Store
+# We might want to keep database.db since it has the seed data for the demo
+# database.db 

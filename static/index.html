@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login Anomaly Detector</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/moment@2.29.4/moment.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-moment@1.0.1/dist/chartjs-adapter-moment.min.js"></script>
+</head>
+
+<body class="bg-slate-900 text-white font-sans">
+    <div class="container mx-auto p-6">
+        <header class="mb-10 text-center">
+            <h1 class="text-4xl font-bold text-blue-400">Time Anomaly Detector</h1>
+            <p class="text-gray-400 mt-2">Monitoring user login patterns for unusual activity</p>
+        </header>
+
+        <main class="space-y-6">
+            <!-- Stats Row -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="bg-slate-800 p-6 rounded-lg shadow-lg border-l-4 border-blue-500">
+                    <h3 class="text-gray-400 text-sm font-semibold uppercase">Total Logins</h3>
+                    <p class="text-3xl font-bold text-white mt-2" id="statTotal">0</p>
+                </div>
+                <div class="bg-slate-800 p-6 rounded-lg shadow-lg border-l-4 border-green-500">
+                    <h3 class="text-gray-400 text-sm font-semibold uppercase">Safe Logins</h3>
+                    <p class="text-3xl font-bold text-white mt-2" id="statSafe">0</p>
+                </div>
+                <div class="bg-slate-800 p-6 rounded-lg shadow-lg border-l-4 border-red-500">
+                    <h3 class="text-gray-400 text-sm font-semibold uppercase">Anomalies</h3>
+                    <p class="text-3xl font-bold text-white mt-2" id="statAnom">0</p>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Simulated Login Panel -->
+                <div class="bg-slate-800 p-6 rounded-lg shadow-lg">
+                    <h2 class="text-xl font-semibold mb-4 text-emerald-400">Simulate Login</h2>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm mb-1 text-gray-300">User Role</label>
+                            <select id="userId"
+                                class="w-full p-2 bg-slate-700 rounded border border-slate-600 focus:border-blue-500 outline-none">
+                                <option value="user_a">User A (Day Worker 9am-5pm)</option>
+                                <option value="user_b">User B (Night Shift 10pm-4am)</option>
+                                <option value="user_c">User C (Always Allowed)</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm mb-1 text-gray-300">Login Timestamp</label>
+                            <input type="datetime-local" id="timestamp"
+                                class="w-full p-2 bg-slate-700 rounded border border-slate-600 text-white">
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            <input type="checkbox" id="simulateFailure"
+                                class="w-4 h-4 bg-slate-700 border-slate-600 rounded">
+                            <label for="simulateFailure" class="text-sm text-gray-300">Simulate Incorrect
+                                Password</label>
+                        </div>
+
+                        <button onclick="simulateLogin()"
+                            class="w-full py-2 bg-blue-600 hover:bg-blue-500 rounded font-semibold transition">
+                            Log In
+                        </button>
+                    </div>
+                    <div id="result" class="mt-4 p-4 rounded hidden">
+                        <!-- Result text -->
+                    </div>
+
+                    <div class="mt-6">
+                        <h3 class="text-lg font-semibold mb-2 text-blue-300">Login Time Distribution</h3>
+                        <canvas id="loginChart" class="w-full h-48"></canvas>
+                    </div>
+                </div>
+
+                <!-- Recent Logs Panel -->
+                <div class="bg-slate-800 p-6 rounded-lg shadow-lg relative">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-xl font-semibold text-purple-400">Live Login Monitor</h2>
+                        <a href="/api/export" target="_blank"
+                            class="bg-blue-600 hover:bg-blue-500 text-white text-xs px-3 py-1 rounded font-bold transition">
+                            DOWNLOAD REPORT
+                        </a>
+                    </div>
+                    <div class="h-64 overflow-y-auto">
+                        <table class="w-full text-left text-sm text-gray-300">
+                            <thead class="bg-slate-700 text-xs uppercase sticky top-0">
+                                <tr>
+                                    <th class="p-2">Time</th>
+                                    <th class="p-2">User</th>
+                                    <th class="p-2">IP</th>
+                                    <th class="p-2">Location</th>
+                                    <th class="p-2">Details</th>
+                                    <th class="p-2">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="activityLog" class="divide-y divide-slate-700">
+                                <!-- Logs go here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- INTRUDER ALERT MODAL -->
+    <div id="alertModal" class="fixed inset-0 bg-red-900/90 hidden flex items-center justify-center z-50">
+        <div class="bg-slate-900 border-4 border-red-500 p-8 rounded-xl shadow-2xl text-center max-w-md animate-bounce">
+            <div class="text-6xl mb-4">⚠️</div>
+            <h2 class="text-3xl font-extrabold text-red-500 mb-2">SECURITY ALERT</h2>
+            <p class="text-white text-lg">Unusual activity detected.</p>
+            <p class="text-gray-400 mb-6">System has flagged this login attempt.</p>
+            <button onclick="document.getElementById('alertModal').classList.add('hidden')"
+                class="bg-red-600 hover:bg-red-500 text-white px-6 py-2 rounded font-bold uppercase tracking-wider">
+                DISMISS
+            </button>
+        </div>
+    </div>
+
+    <script>
+        async function simulateLogin() {
+            const userId = document.getElementById('userId').value;
+            let timestamp = document.getElementById('timestamp').value;
+            const isFailure = document.getElementById('simulateFailure').checked;
+
+            if (!userId) {
+                alert("Please enter a User ID");
+                return;
+            }
+
+            if (!timestamp) {
+                // Default to now if not set
+                timestamp = new Date().toISOString();
+            }
+
+            const payload = {
+                user_id: userId,
+                timestamp: timestamp,
+                success: !isFailure
+            };
+
+            const res = await fetch('/api/analyze', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            const data = await res.json();
+            displayResult(data);
+        }
+
+        function displayResult(data) {
+            const resultBox = document.getElementById('result');
+            resultBox.classList.remove('hidden', 'bg-green-900', 'bg-red-900', 'text-green-200', 'text-red-200');
+
+            if (data.status === 'anomaly' || data.status === 'abnormal_login') {
+                resultBox.classList.add('bg-red-900', 'text-red-200');
+                resultBox.innerHTML = `<strong>⚠️ Anomaly Detected!</strong><br>Score: ${data.score.toFixed(2)}`;
+
+                // Show Modal
+                const modal = document.getElementById('alertModal');
+                modal.classList.remove('hidden');
+                // Auto hide after 3 seconds
+                setTimeout(() => modal.classList.add('hidden'), 3000);
+
+            } else {
+                resultBox.classList.add('bg-green-900', 'text-green-200');
+                resultBox.innerHTML = `<strong>✅ Normal Login</strong><br>Score: ${data.score ? data.score.toFixed(2) : 'N/A'}`;
+            }
+
+            loadLogs(document.getElementById('userId').value); // Refresh logs
+        }
+
+        let loginChart = null;
+
+        async function loadLogs(userId) {
+            const res = await fetch(`/api/logs?user_id=${userId}`);
+            const logs = await res.json();
+
+            // Update Stats
+            const total = logs.length;
+            const anomalies = logs.filter(l => l.status === 'anomaly' || l.status === 'abnormal_login').length;
+            const safe = total - anomalies;
+
+            document.getElementById('statTotal').innerText = total;
+            document.getElementById('statSafe').innerText = safe;
+            document.getElementById('statAnom').innerText = anomalies;
+
+            const list = document.getElementById('activityLog');
+            list.innerHTML = '';
+
+            // Prepare data for chart
+            const chartData = [];
+
+            logs.forEach(log => {
+                const tr = document.createElement('tr');
+                let statusColor = 'text-green-400';
+                let statusText = log.status.toUpperCase();
+
+                if (log.status === 'blocked') {
+                    statusColor = 'text-red-500 font-bold';
+                    tr.className = 'bg-red-900/20';
+                } else if (log.status === 'failed') {
+                    statusColor = 'text-yellow-400';
+                } else if (log.status === 'abnormal_login' || log.status === 'intruder_alert') {
+                    statusColor = 'text-red-500 font-extrabold';
+                    statusText = 'ABNORMAL LOGIN';
+                } else if (log.status === 'anomaly') {
+                    statusColor = 'text-orange-400';
+                } else if (log.status === 'normal_login' || log.status === 'success') {
+                    statusColor = 'text-green-400 font-bold';
+                    statusText = 'NORMAL LOGIN';
+                }
+
+                const date = new Date(log.timestamp).toLocaleString();
+
+                tr.innerHTML = `
+                    <td class="p-2">${date}</td>
+                    <td class="p-2">${log.user_id}</td>
+                    <td class="p-2 font-mono text-xs text-blue-300">${log.ip_address || '127.0.0.1'}</td>
+                    <td class="p-2">${log.location || 'Localhost'}</td>
+                    <td class="p-2 text-xs text-gray-400 italic">${log.details || '-'}</td>
+                    <td class="p-2 ${statusColor}">${statusText}</td>
+                `;
+                list.appendChild(tr);
+
+                // For chart: x = date (day), y = hour of day
+                const hour = date.getHours() + date.getMinutes() / 60;
+                chartData.push({
+                    x: date,
+                    y: hour,
+                    status: log.status
+                });
+            });
+
+            updateChart(chartData);
+        }
+
+        // ... updateChart function remains same ...
+
+        // Initial Load
+        // Load logs when user changes selection (debounced for input)
+        let debounceTimer;
+        document.getElementById('userId').addEventListener('input', (e) => {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => {
+                if (e.target.value) loadLogs(e.target.value);
+            }, 500);
+        });
+
+        // Initial load if value exists
+        if (document.getElementById('userId').value) {
+            loadLogs(document.getElementById('userId').value);
+        }
+
+    </script>
+</body>
+
+</html>
